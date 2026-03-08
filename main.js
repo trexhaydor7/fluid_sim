@@ -69,6 +69,8 @@ const scene = new THREE.Scene();
 
 await init();
 const sim = new FluidSim(10, 10, 10);
+sim.set_density(5, 5, 5, 1.0);
+sim.set_density(3, 3, 3, 0.5);
 const rawMatrix = Array.from(sim.raw_3d_matrix());
 const cityGrid = [];
 const xLength = rawMatrix.splice(0, 1)[0];
@@ -125,7 +127,8 @@ for(let i = 0; i < cityGrid.length; i++){
 }
 
 const camera = new THREE.PerspectiveCamera(45, view.clientWidth / view.clientHeight, 1, 1000);
-camera.position.set(4, 5, 11);
+camera.position.set(50, 50, 100);
+camera.lookAt(0, 0, 0);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
