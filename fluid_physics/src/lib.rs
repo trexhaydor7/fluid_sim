@@ -1,7 +1,7 @@
 use wasm_bindgen::prelude::*;
 
 mod fluid_grid;
-use fluid_grid::FluidGrid;
+pub use fluid_grid::FluidGrid;
 
 #[wasm_bindgen]
 pub struct FluidSim {
@@ -24,6 +24,14 @@ impl FluidSim {
     pub fn increment_dt(&mut self) -> f32 {
         self.grid.increment_dt();
         self.grid.get_dt()
+    }
+
+    pub fn step(&mut self, dt: f32) {
+        self.grid.step(dt);
+    }
+
+    pub fn set_velocity(&mut self, x: usize, y: usize, z: usize, vx: f32, vy: f32, vz: f32) {
+    self.grid.set_velocity(x, y, z, vx, vy, vz);
     }
 
     pub fn raw_3d_matrix(&self) -> Box<[f32]> {

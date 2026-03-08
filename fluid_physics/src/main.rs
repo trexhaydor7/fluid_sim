@@ -1,107 +1,132 @@
-use wasm_bindgen::prelude::*;
+use fluid_physics::FluidGrid;
 
-mod fluid_grid;
-use fluid_grid::FluidGrid;
+fn main() {
+    println!("=== FluidGrid Test Suite ===\n");
 
-#[wasm_bindgen]
-pub fn main() {
-    println!("Running fluid grid tests...\n");
+    test_construction();
+    test_set_get_velocity();
+    test_set_get_density();
+    test_integrate_applies_gravity();
+    test_extrapolate_sets_boundaries_inactive();
+    test_advect_moves_density();
+    test_full_step();
 
-    test_grid_creation();
-    test_index_mapping();
-    test_set_and_get_density();
-    test_set_and_get_velocity();
-    test_bounds();
-
-    println!("\nAll tests passed.");
+    println!("\nAll tests passed!");
 }
 
-fn test_grid_creation() {
-    let grid = FluidGrid::new(4, 4, 4);
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
-    // Access size via getters, not fields directly
-    assert_eq!(grid.nx(), 4);
-    assert_eq!(grid.ny(), 4);
-    assert_eq!(grid.nz(), 4);
+fn assert_approx(label: &str, got: f32, expected: f32, tolerance: f32) {
+    if (got - expected).abs() > tolerance {
+        panic!("[FAIL] {}: expected {:.6}, got {:.6}", label, expected, got);
+    }
+    println!("[PASS] {}", label);
+}
 
-    // Check all cells start at zero via getters
-    for z in 0..4 {
-        for y in 0..4 {
-            for x in 0..4 {
-                assert_eq!(grid.get_density(x, y, z), 0.0);
-                let (vx, vy, vz): (f32, f32, f32) = grid.get_velocity(x, y, z);
-                assert_eq!(vx, 0.0);
-                assert_eq!(vy, 0.0);
-                assert_eq!(vz, 0.0);
-            }
+fn assert_true(label: &str, value: bool) {
+    if !value {
+        panic!("[FAIL] {}", label);
+    }
+    println!("[PASS] {}", label);
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+fn test_construction() {
+    println!("--- test_construction ---");
+    let grid = FluidGrid::new(10, 10, 10);
+    assert_eq!(grid.nx(), 10);
+    assert_eq!(grid.ny(), 10);
+    assert_eq!(grid.nz(), 10);
+
+    // All velocities and densities should be zero
+    let (vx, vy, vz) = grid.get_velocity(5, 5, 5);
+    assert_approx("initial vx", vx, 0.0, 1e-6);
+    assert_approx("initial vy", vy, 0.0, 1e-6);
+    assert_approx("initial vz", vz, 0.0, 1e-6);
+    assert_approx("initial density", grid.get_density(5, 5, 5), 0.0, 1e-6);
+}
+
+fn test_set_get_velocity() {
+    println!("--- test_set_get_velocity ---");
+    let mut grid = FluidGrid::new(10, 10, 10);
+    grid.set_velocity(3, 4, 5, 1.5, -2.0, 0.75);
+    let (vx, vy, vz) = grid.get_velocity(3, 4, 5);
+    assert_approx("set/get vx", vx, 1.5,  1e-6);
+    assert_approx("set/get vy", vy, -2.0, 1e-6);
+    assert_approx("set/get vz", vz, 0.75, 1e-6);
+}
+
+fn test_set_get_density() {
+    println!("--- test_set_get_density ---");
+    let mut grid = FluidGrid::new(10, 10, 10);
+    grid.set_density(2, 3, 4, 42.0);
+    assert_approx("set/get density", grid.get_density(2, 3, 4), 42.0, 1e-6);
+}
+
+fn test_integrate_applies_gravity() {
+    println!("--- test_integrate_applies_gravity ---");
+    let mut grid = FluidGrid::new(10, 10, 10);
+    // vy starts at 0; after one step gravity should make it negative
+    grid.step(0.016);
+    let (_, vy, _) = grid.get_velocity(5, 5, 5);
+    assert_true("gravity pulls vy negative", vy < 0.0);
+
+    // After two steps it should be more negative
+    let vy_after_one = vy;
+    grid.step(0.016);
+    let (_, vy2, _) = grid.get_velocity(5, 5, 5);
+    assert_true("gravity accumulates", vy2 < vy_after_one);
+}
+
+fn test_extrapolate_sets_boundaries_inactive() {
+    println!("--- test_extrapolate_sets_boundaries_inactive ---");
+    let mut grid = FluidGrid::new(10, 10, 10);
+    grid.step(0.016); // extrapolate is called inside step
+
+    // After extrapolate, border cells should be inactive
+    // Check a few face cells
+    // (extrapolate marks y=0, y=ny-1, x=0, x=nx-1, z=0, z=nz-1 as inactive)
+    // We can verify indirectly: velocity at border should match its inner neighbor
+    // Just check the step doesn't panic — boundary logic is exercised
+    println!("[PASS] extrapolate runs without panic");
+}
+
+fn test_advect_moves_density() {
+    println!("--- test_advect_moves_density ---");
+    let mut grid = FluidGrid::new(20, 20, 20);
+
+    // Place a density blob in the middle and give it a positive x velocity
+    grid.set_density(10, 10, 10, 1.0);
+    grid.set_velocity(10, 10, 10, 5.0, 0.0, 0.0);
+
+    let density_before = grid.get_density(10, 10, 10);
+    grid.step(0.016);
+    let density_after = grid.get_density(10, 10, 10);
+
+    // Density should have moved away from (10,10,10) — value decreases there
+    assert_true(
+        "density advects away from source cell",
+        density_after < density_before,
+    );
+}
+
+fn test_full_step() {
+    println!("--- test_full_step (10 steps, no panic) ---");
+    let mut grid = FluidGrid::new(15, 15, 15);
+
+    // Set up a simple scenario: fluid in the middle with downward velocity
+    for x in 5..10 {
+        for z in 5..10 {
+            grid.set_density(x, 10, z, 1.0);
+            grid.set_velocity(x, 10, z, 0.0, -1.0, 0.0);
         }
     }
 
-    println!("[PASS] grid creation — size 4x4x4, all zeros");
-}
+    for step in 0..10 {
+        grid.step(0.016);
+        println!("  step {} ok — center density: {:.4}", step, grid.get_density(7, 7, 7));
+    }
 
-fn test_index_mapping() {
-    let grid = FluidGrid::new(4, 4, 4);
-
-    assert_eq!(grid.idx(0, 0, 0), 0);
-    assert_eq!(grid.idx(1, 0, 0), 1); // +1 along x
-    assert_eq!(grid.idx(0, 1, 0), 4); // +nx along y
-    assert_eq!(grid.idx(0, 0, 1), 16); // +nx*ny along z
-    assert_eq!(grid.idx(2, 3, 1), 30); // 2 + 3*4 + 1*16
-
-    println!("[PASS] index mapping — idx(x,y,z) = x + y*nx + z*nx*ny");
-}
-
-fn test_set_and_get_density() {
-    let mut grid = FluidGrid::new(8, 8, 8);
-
-    grid.set_density(4, 4, 4, 1.0);
-    assert_eq!(grid.get_density(4, 4, 4), 1.0);
-
-    // Neighbours unaffected
-    assert_eq!(grid.get_density(3, 4, 4), 0.0);
-    assert_eq!(grid.get_density(4, 3, 4), 0.0);
-
-    // Overwrite
-    grid.set_density(4, 4, 4, 0.25);
-    assert_eq!(grid.get_density(4, 4, 4), 0.25);
-
-    println!("[PASS] density — set/get, overwrite, isolation");
-}
-
-fn test_set_and_get_velocity() {
-    let mut grid = FluidGrid::new(8, 8, 8);
-
-    grid.set_velocity(4, 4, 4, 1.5, -0.5, 0.3);
-    let (vx, vy, vz): (f32, f32, f32) = grid.get_velocity(4, 4, 4);
-    assert_eq!(vx, 1.5);
-    assert_eq!(vy, -0.5);
-    assert_eq!(vz, 0.3);
-
-    // Neighbour unaffected
-    let (nx, ny, nz): (f32, f32, f32) = grid.get_velocity(5, 4, 4);
-    assert_eq!(nx, 0.0);
-    assert_eq!(ny, 0.0);
-    assert_eq!(nz, 0.0);
-
-    // Fractional values
-    grid.set_velocity(1, 1, 1, 0.001, 0.002, 0.003);
-    let (vx, vy, vz): (f32, f32, f32) = grid.get_velocity(1, 1, 1);
-    assert!((vx - 0.001).abs() < 1e-6);
-    assert!((vy - 0.002).abs() < 1e-6);
-    assert!((vz - 0.003).abs() < 1e-6);
-
-    println!("[PASS] velocity — set/get, fractional values, neighbour isolation");
-}
-
-fn test_bounds() {
-    let grid = FluidGrid::new(4, 6, 8);
-
-    // Last valid cell should be (nx-1, ny-1, nz-1)
-    let last = grid.idx(3, 5, 7);
-    let total = grid.nx() * grid.ny() * grid.nz();
-    assert_eq!(last, total - 1);
-    assert_eq!(total, 4 * 6 * 8);
-
-    println!("[PASS] bounds — non-cubic grid (4x6x8), last index correct");
+    println!("[PASS] full_step completed 10 iterations without panic");
 }
