@@ -8,7 +8,7 @@ const view   = document.getElementById('view');
 const renderer = new THREE.WebGLRenderer({ antialias: true, canvas });
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.setSize(view.clientWidth, view.clientHeight);
-renderer.setClearColor(0x020d1a);
+renderer.setClearColor(0x00060f);
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.shadowMap.enabled = true;
 
@@ -23,6 +23,76 @@ const NX = SIM_NX, NY = SIM_NY, NZ = SIM_NZ;
 const gridCenterX = (NX * CELL_SIZE) / 2;
 const gridCenterY = (NY * CELL_SIZE) / 2;
 const gridCenterZ = (NZ * CELL_SIZE) / 2;
+
+// ── Star field ────────────────────────────────────────────────────────────────
+{
+  const starCount = 1800;
+  const positions = new Float32Array(starCount * 3);
+  const colors    = new Float32Array(starCount * 3);
+  const sizes     = new Float32Array(starCount);
+  const rng = () => Math.random();
+
+  for (let i = 0; i < starCount; i++) {
+    const theta = rng() * Math.PI * 2;
+    const phi   = rng() * Math.PI * 0.48;
+    const r     = 180;
+    positions[i*3]   = gridCenterX + r * Math.sin(phi) * Math.cos(theta);
+    positions[i*3+1] = 15          + r * Math.cos(phi);
+    positions[i*3+2] = gridCenterZ + r * Math.sin(phi) * Math.sin(theta);
+
+    const warm = rng() < 0.15;
+    const cool = rng() < 0.25;
+    const br   = 0.75 + rng() * 0.25;
+    colors[i*3]   = warm ? br        : cool ? br * 0.6 : br * 0.88;
+    colors[i*3+1] = warm ? br * 0.85 : cool ? br * 0.8 : br * 0.92;
+    colors[i*3+2] = warm ? br * 0.5  : cool ? br       : br;
+
+    sizes[i] = rng() < 0.04 ? 5.0 + rng() * 3.0
+             : rng() < 0.20 ? 2.5 + rng() * 1.5
+             :                1.0 + rng() * 1.2;
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geo.setAttribute('color',    new THREE.BufferAttribute(colors,    3));
+  geo.setAttribute('size',     new THREE.BufferAttribute(sizes,     1));
+
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { time: { value: 0 } },
+    vertexShader: `
+      attribute float size;
+      attribute vec3 color;
+      varying vec3 vColor;
+      varying float vAlpha;
+      uniform float time;
+      void main() {
+        vColor = color;
+        float twinkle = 0.8 + 0.2 * sin(time * 2.1 + position.x * 0.37 + position.z * 0.19);
+        vAlpha = twinkle;
+        gl_PointSize = size * twinkle;
+        gl_Position  = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      varying vec3 vColor;
+      varying float vAlpha;
+      void main() {
+        float d = length(gl_PointCoord - vec2(0.5));
+        if (d > 0.5) discard;
+        float alpha = smoothstep(0.5, 0.0, d) * vAlpha;
+        gl_FragColor = vec4(vColor, alpha);
+      }
+    `,
+    transparent: true,
+    depthWrite:  false,
+    depthTest:   false,
+    vertexColors: true,
+  });
+
+  const stars = new THREE.Points(geo, mat);
+  scene.add(stars);
+  scene.userData.starMat = mat;
+}
 
 // Camera
 const camera = new THREE.PerspectiveCamera(50, view.clientWidth / view.clientHeight, 0.1, 1000);
@@ -40,12 +110,12 @@ controls.target.set(gridCenterX, CELL_SIZE * 3, gridCenterZ);
 controls.update();
 
 // Lights
-const spot = new THREE.SpotLight(0xffffff, 2000, 120, 0.3, 1);
+const spot = new THREE.SpotLight(0xc8d8ff, 1600, 120, 0.3, 1);
 spot.position.set(gridCenterX, 20, gridCenterZ);
 spot.castShadow  = true;
 spot.shadow.bias = -0.0001;
 scene.add(spot);
-scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+scene.add(new THREE.AmbientLight(0x8aaabb, 0.45));
 
 window.addEventListener('resize', () => {
   camera.aspect = view.clientWidth / view.clientHeight;
@@ -295,7 +365,7 @@ switchCity('medium');
 
 // ── Fluid rendering ──────────────────────────────────────────────────────────
 const BUCKETS = 8;
-const voxelGeo = new THREE.BoxGeometry(CELL_SIZE * 0.98, CELL_SIZE * 0.55, CELL_SIZE * 0.98);
+const voxelGeo = new THREE.BoxGeometry(CELL_SIZE * 1.04, CELL_SIZE * 0.72, CELL_SIZE * 1.04);
 const MAX_INSTANCES = NX * NY * NZ;
 
 const bucketMeshes = Array.from({ length: BUCKETS }, (_, bi) => {
@@ -303,7 +373,7 @@ const bucketMeshes = Array.from({ length: BUCKETS }, (_, bi) => {
   const mat = new THREE.MeshPhongMaterial({
     color:       new THREE.Color(0.05, 0.35 + t * 0.2, 0.95),
     transparent: true,
-    opacity:     0.18 + t * 0.45,
+    opacity:     0.28 + t * 0.52,   // more opaque at all levels → fewer visible holes
     depthWrite:  false,
     shininess:   120,
     specular:    new THREE.Color(0.6, 0.8, 1.0),
@@ -326,7 +396,7 @@ function rebuildScene() {
 
   for (let i = 3; i < raw.length; i += 4) {
     const d = raw[i + 3];        // density (4th float of the quad)
-    if (d < 0.04) continue;
+    if (d < 0.015) continue;
     const bi = Math.min(Math.floor(d * BUCKETS), BUCKETS - 1);
     bucketPos[bi].push(
       raw[i]     * CELL_SIZE,    // x
@@ -430,6 +500,7 @@ function animate() {
     sim.step(dt * simSpeed);
     rebuildScene();
   }
+  if (scene.userData.starMat) scene.userData.starMat.uniforms.time.value = now / 1000;
   controls.update();
   renderer.render(scene, camera);
 }

@@ -8,10 +8,11 @@
 // This makes divergence exact: div(i) = vecx[x+1]-vecx[x] + vecy[y+1]-vecy[y] + vecz[z+1]-vecz[z]
 // and pressure corrections only touch the two faces shared with each neighbor.
 
-const GRAVITY: f32        = 2.5;   // stronger pull keeps water on the ground
+const GRAVITY: f32        = 4.5;   // strong pull ensures forward flow beats upward pressure
 const ITERATIONS: usize   = 250;
 const OVERRELAX: f32      = 1.95;
-const DENSITY_DECAY: f32  = 0.9999;
+const DENSITY_DECAY: f32  = 0.99997;  // slower decay → fluid holds together longer
+const DENSITY_DIFFUSE: f32 = 0.18;    // spatial smoothing to fill gaps between cells
 
 pub struct FluidGrid {
     nx: usize,
@@ -130,6 +131,7 @@ impl FluidGrid {
         self.open_boundary();
         self.advect(dt);
         self.apply_inlets();   // re-apply after advect so backtracing can't erase them
+        self.diffuse_density(); // smooth out gaps before rendering
         self.enforce_walls();
         self.sanitize();
     }
@@ -145,9 +147,14 @@ impl FluidGrid {
                         // Gentle horizontal viscosity: nudge x/z velocities toward
                         // their neighbors so pressure can spread laterally.
                         // This mimics incompressible fluid spreading sideways when blocked.
-                        // Aggressively damp upward velocity — water should not climb walls
+                        // Aggressively damp upward velocity — water should not climb walls.
+                        // Two-tier damping: any positive vy is cut hard each frame,
+                        // and anything below a small threshold is zeroed outright.
                         if self.vecy[i] > 0.0 {
-                            self.vecy[i] *= 0.6;
+                            self.vecy[i] *= 0.05;      // crush upward momentum almost instantly
+                            if self.vecy[i] < 0.05 {
+                                self.vecy[i] = 0.0;
+                            }
                         }
 
                         if x > 0 && x < self.nx - 1 {
@@ -158,12 +165,14 @@ impl FluidGrid {
                                 self.vecx[i] += (avg - self.vecx[i]) * 0.12;
                             }
                         }
+                        // Strong z-spreading: when fluid is blocked in x it should
+                        // fan out along z (around buildings) rather than pile up and rise.
                         if z > 0 && z < self.nz - 1 {
                             let front = self.idx(x, y, z-1);
                             let back  = self.idx(x, y, z+1);
                             if self.active[front] && self.active[back] {
                                 let avg = (self.vecz[front] + self.vecz[i] + self.vecz[back]) / 3.0;
-                                self.vecz[i] += (avg - self.vecz[i]) * 0.12;
+                                self.vecz[i] += (avg - self.vecz[i]) * 0.35;
                             }
                         }
                     }
@@ -312,17 +321,33 @@ impl FluidGrid {
                     let ty = src_y - y0 as f32;
                     let tz = src_z - z0 as f32;
 
-                    // Helper: trilinear sample of a field, treating inactive cells as 0
+                    // Helper: trilinear sample of a field.
+                    // For inactive (solid) corner cells we substitute the value
+                    // of the nearest active corner so that density doesn't
+                    // artificially collapse to zero against a wall face.
                     macro_rules! trilin {
                         ($buf:expr) => {{
-                            let sample = |cx: usize, cy: usize, cz: usize| -> f32 {
-                                let ii = cx + cy * inx + cz * inx * iny;
-                                if self.active[ii] { $buf[ii] } else { 0.0 }
-                            };
-                            (1.0-tz)*((1.0-ty)*((1.0-tx)*sample(x0,y0,z0)+tx*sample(x1,y0,z0))
-                                          +ty *((1.0-tx)*sample(x0,y1,z0)+tx*sample(x1,y1,z0)))
-                               +tz *((1.0-ty)*((1.0-tx)*sample(x0,y0,z1)+tx*sample(x1,y0,z1))
-                                          +ty *((1.0-tx)*sample(x0,y1,z1)+tx*sample(x1,y1,z1)))
+                            // Gather the 8 corner values, flagging which are active
+                            let corners: [(f32, bool); 8] = [
+                                { let ii = x0+y0*inx+z0*inx*iny; ($buf[ii], self.active[ii]) },
+                                { let ii = x1+y0*inx+z0*inx*iny; ($buf[ii], self.active[ii]) },
+                                { let ii = x0+y1*inx+z0*inx*iny; ($buf[ii], self.active[ii]) },
+                                { let ii = x1+y1*inx+z0*inx*iny; ($buf[ii], self.active[ii]) },
+                                { let ii = x0+y0*inx+z1*inx*iny; ($buf[ii], self.active[ii]) },
+                                { let ii = x1+y0*inx+z1*inx*iny; ($buf[ii], self.active[ii]) },
+                                { let ii = x0+y1*inx+z1*inx*iny; ($buf[ii], self.active[ii]) },
+                                { let ii = x1+y1*inx+z1*inx*iny; ($buf[ii], self.active[ii]) },
+                            ];
+                            // Fallback value: average of active corners
+                            let active_sum: f32 = corners.iter().filter(|c| c.1).map(|c| c.0).sum();
+                            let active_cnt: usize = corners.iter().filter(|c| c.1).count();
+                            let fallback = if active_cnt > 0 { active_sum / active_cnt as f32 } else { 0.0 };
+                            let v = |idx: usize| -> f32 { if corners[idx].1 { corners[idx].0 } else { fallback } };
+                            // Standard trilinear interpolation using filled values
+                            (1.0-tz)*((1.0-ty)*((1.0-tx)*v(0)+tx*v(1))
+                                          +ty *((1.0-tx)*v(2)+tx*v(3)))
+                               +tz *((1.0-ty)*((1.0-tx)*v(4)+tx*v(5))
+                                          +ty *((1.0-tx)*v(6)+tx*v(7)))
                         }};
                     }
 
@@ -437,9 +462,49 @@ impl FluidGrid {
             if self.vecz[i].is_nan()    { self.vecz[i]    = 0.0; }
             if self.density[i].is_nan() { self.density[i] = 0.0; }
             self.vecx[i]    = self.vecx[i].clamp(-60.0, 60.0);
-            self.vecy[i]    = self.vecy[i].clamp(-8.0, 4.0);   // hard asymmetric cap: falls freely, barely rises
+            self.vecy[i]    = self.vecy[i].clamp(-8.0, 0.15);  // hard asymmetric cap: falls freely, barely rises
             self.vecz[i]    = self.vecz[i].clamp(-60.0, 60.0);
             self.density[i] = (self.density[i] * DENSITY_DECAY).clamp(0.0, 1.0);
+        }
+    }
+
+    // ── Density diffusion ────────────────────────────────────────────────────
+    // One pass of spatial averaging: each active cell takes a weighted blend
+    // of itself and its active face-neighbours.  Upward neighbour is excluded
+    // so density cannot bleed above the waterline and make fluid appear to
+    // climb walls.
+    fn diffuse_density(&mut self) {
+        let nx = self.nx; let ny = self.ny; let nz = self.nz;
+        let old = self.density.clone();
+        for z in 1..nz-1 {
+            for y in 1..ny-1 {
+                for x in 1..nx-1 {
+                    let i = self.idx(x, y, z);
+                    if !self.active[i] { continue; }
+
+                    // Lateral (x/z) and downward (y-1) neighbours only —
+                    // never the cell above (y+1) to prevent upward creep.
+                    let neighbours = [
+                        self.idx(x-1, y,   z),
+                        self.idx(x+1, y,   z),
+                        self.idx(x,   y-1, z),   // below only, not above
+                        self.idx(x,   y,   z-1),
+                        self.idx(x,   y,   z+1),
+                    ];
+                    let mut sum = 0.0f32;
+                    let mut cnt = 0usize;
+                    for &ni in &neighbours {
+                        if self.active[ni] {
+                            sum += old[ni];
+                            cnt += 1;
+                        }
+                    }
+                    if cnt > 0 {
+                        let avg = sum / cnt as f32;
+                        self.density[i] = old[i] * (1.0 - DENSITY_DIFFUSE) + avg * DENSITY_DIFFUSE;
+                    }
+                }
+            }
         }
     }
 
