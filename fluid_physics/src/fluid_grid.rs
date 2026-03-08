@@ -3,7 +3,7 @@
 
 const DT: f32 = 0.016; //for 60 FPS
 
-pub struct FluidGrid {
+pub struct FGrid,{
     //Size of grid
     nx: usize,
     ny: usize,

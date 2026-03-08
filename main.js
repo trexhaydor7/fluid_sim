@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import init, { FluidSim } from './pkg/fluid_sim.js';
 
 class cell 
 {
@@ -66,7 +67,9 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
 
-const rawMatrix = raw_3d_matrix();
+await init();
+const sim = new FluidSim(10, 10, 10);
+const rawMatrix = Array.from(sim.raw_3d_matrix());
 const cityGrid = [];
 const xLength = rawMatrix.splice(0, 1)[0];
 const yLength = rawMatrix.splice(0, 1)[0];
