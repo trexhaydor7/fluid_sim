@@ -8,7 +8,6 @@ pub struct FluidGrid {
     ny: usize,
     nz: usize,
     active: Vec<bool>,
-
     dt: f32,
 
     //Updated values
@@ -59,7 +58,7 @@ impl FluidGrid {
     pub fn get_dt(&self) -> f32 {
         self.dt
     }
-
+    //CARGO ITS RIGHTTTT HERREEE!!!!!
     pub fn increment_dt(&mut self) {
         self.dt += DT;
     }
