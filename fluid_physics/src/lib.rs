@@ -30,6 +30,10 @@ impl FluidSim {
         self.grid.raw_3d_matrix().into()
     }
 
+    pub fn get_density(&self, x: usize, y: usize, z: usize) -> f32 {
+        self.grid.get_density(x, y, z)
+    }
+
     pub fn set_density(&mut self, x: usize, y: usize, z: usize, density: f32) {
         self.grid.set_density(x, y, z, density);
     }

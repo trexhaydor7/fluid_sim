@@ -77,7 +77,8 @@ const xLength = rawMatrix.splice(0, 1)[0];
 const yLength = rawMatrix.splice(0, 1)[0];
 const zLength = rawMatrix.splice(0, 1)[0];
 console.log("Creation:");
-for(let i = 0; i < (xLength * yLength * zLength); i = i + 4)
+
+for(let i = 0; i < rawMatrix.length; i = i + 4)
 {
   cityGrid.push(new cell(rawMatrix[i], rawMatrix[i + 1], rawMatrix[i + 2], rawMatrix[i + 3]));
   console.log("" + rawMatrix[i] + " " + rawMatrix[i + 1] + " " + rawMatrix[i + 2] + " " + rawMatrix[i + 3]);
@@ -90,7 +91,7 @@ let xLocation = 0;
 let yLocation = 0;
 let zLocation = 0;
 let cDensity = 0;
-const geometry = new THREE.BoxGeometry(1, 1, 1);
+const geometry = new THREE.BoxGeometry(.1, .1, .1);
 let nothing = new THREE.Color('white');
 let blue = new THREE.Color('blue');
 let solid = new THREE.Color('gray');
@@ -106,7 +107,7 @@ for(let i = 0; i < cityGrid.length; i++){
 
   let color, opacity;
 
-  if(cDensity==0){
+  if(cDensity < 0.001){
     continue;
   }
   else if(cDensity==1){
