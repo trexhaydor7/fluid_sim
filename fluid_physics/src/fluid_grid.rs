@@ -1,9 +1,8 @@
-
 #![allow(dead_code, unused_variables)]
 
 const DT: f32 = 0.016; //for 60 FPS
 
-pub struct FGrid,{
+pub struct FluidGrid {
     //Size of grid
     nx: usize,
     ny: usize,
@@ -33,7 +32,7 @@ impl FluidGrid {
             ny,
             nz,
             active: vec![true; size],
-            dt: 0.0, 
+            dt: 0.0,
             vecx: vec![0.0; size],
             vecy: vec![0.0; size],
             vecz: vec![0.0; size],
@@ -44,7 +43,7 @@ impl FluidGrid {
             density0: vec![0.0; size],
         }
     }
-    
+
     pub fn nx(&self) -> usize {
         self.nx
     }
@@ -70,9 +69,7 @@ impl FluidGrid {
 
     pub fn get_velocity(&self, x: usize, y: usize, z: usize) -> (f32, f32, f32) {
         let i = self.idx(x, y, z);
-        (self.vecx[i],
-        self.vecy[i], 
-        self.vecz[i])
+        (self.vecx[i], self.vecy[i], self.vecz[i])
     }
 
     pub fn get_density(&self, x: usize, y: usize, z: usize) -> f32 {
@@ -92,21 +89,14 @@ impl FluidGrid {
         self.density[i] = density;
     }
 
-    
-    pub fn step (&mut self, dt: f32) {
-        
-    }
+    pub fn step(&mut self, dt: f32) {}
 
-    pub fn advect(&mut self, dt:f32) {
-        
-    }
+    pub fn advect(&mut self, dt: f32) {}
 
-    pub fn project(&mut self) {
-
-    }
+    pub fn project(&mut self) {}
 
     //Vector in the form [nx, ny, nz, x, y, z, density. x, y, z, density, ...]
-    pub fn raw_3d_matrix(&self) -> Vec<f32>{
+    pub fn raw_3d_matrix(&self) -> Vec<f32> {
         let mut buf = Vec::new();
 
         //Return total matrix size
@@ -130,9 +120,8 @@ impl FluidGrid {
     }
 
     /*
-    pub fn diffuse(&self) {
+     pub fn diffuse(&self) {
 
-    } 
-   */
-
+     }
+    */
 }

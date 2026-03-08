@@ -44,10 +44,10 @@ fn test_index_mapping() {
     let grid = FluidGrid::new(4, 4, 4);
 
     assert_eq!(grid.idx(0, 0, 0), 0);
-    assert_eq!(grid.idx(1, 0, 0), 1);   // +1 along x
-    assert_eq!(grid.idx(0, 1, 0), 4);   // +nx along y
-    assert_eq!(grid.idx(0, 0, 1), 16);  // +nx*ny along z
-    assert_eq!(grid.idx(2, 3, 1), 30);  // 2 + 3*4 + 1*16
+    assert_eq!(grid.idx(1, 0, 0), 1); // +1 along x
+    assert_eq!(grid.idx(0, 1, 0), 4); // +nx along y
+    assert_eq!(grid.idx(0, 0, 1), 16); // +nx*ny along z
+    assert_eq!(grid.idx(2, 3, 1), 30); // 2 + 3*4 + 1*16
 
     println!("[PASS] index mapping — idx(x,y,z) = x + y*nx + z*nx*ny");
 }
@@ -74,9 +74,9 @@ fn test_set_and_get_velocity() {
 
     grid.set_velocity(4, 4, 4, 1.5, -0.5, 0.3);
     let (vx, vy, vz): (f32, f32, f32) = grid.get_velocity(4, 4, 4);
-    assert_eq!(vx,  1.5);
+    assert_eq!(vx, 1.5);
     assert_eq!(vy, -0.5);
-    assert_eq!(vz,  0.3);
+    assert_eq!(vz, 0.3);
 
     // Neighbour unaffected
     let (nx, ny, nz): (f32, f32, f32) = grid.get_velocity(5, 4, 4);

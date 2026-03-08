@@ -1,16 +1,15 @@
 use wasm_bindgen::prelude::*;
 
 mod fluid_grid;
-use fluid_grid::FluidGrid;  
+use fluid_grid::FluidGrid;
 
 #[wasm_bindgen]
 pub struct FluidSim {
     grid: FluidGrid,
 }
-    
-#[wasm_bindgen]
-impl FluidSim {   
 
+#[wasm_bindgen]
+impl FluidSim {
     #[wasm_bindgen(constructor)]
     pub fn new(nx: usize, ny: usize, nz: usize) -> FluidSim {
         FluidSim {
@@ -19,7 +18,7 @@ impl FluidSim {
     }
 
     pub fn get_dt(&self) -> f32 {
-        return self.grid.get_dt()
+        return self.grid.get_dt();
     }
 
     pub fn increment_dt(&mut self) -> f32 {
