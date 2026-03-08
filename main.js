@@ -172,17 +172,18 @@ addCityVisuals();
 // Fluid rendering — InstancedMesh: one mesh per density bucket, massive perf win
 // over creating/destroying thousands of individual meshes each frame
 const BUCKETS = 8;
-const voxelGeo = new THREE.BoxGeometry(CELL_SIZE * 0.9, CELL_SIZE * 0.9, CELL_SIZE * 0.9);
+const voxelGeo = new THREE.BoxGeometry(CELL_SIZE * 0.98, CELL_SIZE * 0.55, CELL_SIZE * 0.98);
 const MAX_INSTANCES = 40 * 32 * 40;
 
 const bucketMeshes = Array.from({ length: BUCKETS }, (_, bi) => {
   const t = (bi + 0.5) / BUCKETS;
   const mat = new THREE.MeshPhongMaterial({
-    color:       new THREE.Color(0.05, 0.3 + t * 0.25, 0.9),
+    color:       new THREE.Color(0.05, 0.35 + t * 0.2, 0.95),
     transparent: true,
-    opacity:     0.3 + t * 0.65,
+    opacity:     0.18 + t * 0.45,
     depthWrite:  false,
-    shininess:   80,
+    shininess:   120,
+    specular:    new THREE.Color(0.6, 0.8, 1.0),
   });
   const im = new THREE.InstancedMesh(voxelGeo, mat, MAX_INSTANCES);
   im.count = 0;
@@ -224,7 +225,7 @@ function rebuildScene() {
 // Buildings are at bz..bz+3 for bz in [4, 12, 20], so blocked z: 4..7, 12..15, 20..23
 const POUR_X  = 1;
 const POUR_Y0 = FLOOR_Y + 1;
-const POUR_Y1 = FLOOR_Y + 5;
+const POUR_Y1 = FLOOR_Y + 1;  // single cell height — pure flat sheet, no vertical head at all
 
 // All open Z columns (not inside a building footprint's Z extent)
 const BLOCKED_Z = new Set();
@@ -240,9 +241,10 @@ function registerInlets() {
       // Seed 3 cells deep so the pressure solver has a wide driving column.
       // Higher vx (5.0) gives enough head to maintain reasonable speed after
       // the 40% cross-section constriction at building faces.
-      sim.add_inlet(POUR_X,     y, z, 5.0, 0.0, 0.0);
-      sim.add_inlet(POUR_X + 1, y, z, 5.0, 0.0, 0.0);
-      sim.add_inlet(POUR_X + 2, y, z, 5.0, 0.0, 0.0);
+      sim.add_inlet(POUR_X,     y, z, 14.0, 0.0, 0.0);
+      sim.add_inlet(POUR_X + 1, y, z, 14.0, 0.0, 0.0);
+      sim.add_inlet(POUR_X + 2, y, z, 14.0, 0.0, 0.0);
+      sim.add_inlet(POUR_X + 3, y, z, 14.0, 0.0, 0.0);
     }
   }
 }

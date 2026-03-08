@@ -8,10 +8,10 @@
 // This makes divergence exact: div(i) = vecx[x+1]-vecx[x] + vecy[y+1]-vecy[y] + vecz[z+1]-vecz[z]
 // and pressure corrections only touch the two faces shared with each neighbor.
 
-const GRAVITY: f32        = 4.0;
-const ITERATIONS: usize   = 120;
-const OVERRELAX: f32      = 1.5;
-const DENSITY_DECAY: f32  = 0.999; // fluid slowly dissipates so grid never locks up
+const GRAVITY: f32        = 0.3;   // near-zero — water stays flat and races outward
+const ITERATIONS: usize   = 250;   // maximum convergence for instant lateral spreading
+const OVERRELAX: f32      = 1.95;  // near-maximum for fastest pressure equalisation
+const DENSITY_DECAY: f32  = 0.9999; // almost no decay — flood sheet stays solid
 
 pub struct FluidGrid {
     nx: usize,
@@ -134,7 +134,7 @@ impl FluidGrid {
         self.sanitize();
     }
 
-    // ── Gravity ──────────────────────────────────────────────────────────────
+    // ── Gravity + horizontal momentum preservation ───────────────────────────
     fn integrate(&mut self, dt: f32) {
         for z in 0..self.nz {
             for y in 0..self.ny {
@@ -142,6 +142,28 @@ impl FluidGrid {
                     let i = self.idx(x, y, z);
                     if self.active[i] {
                         self.vecy[i] -= GRAVITY * dt;
+                        // Gentle horizontal viscosity: nudge x/z velocities toward
+                        // their neighbors so pressure can spread laterally.
+                        // This mimics incompressible fluid spreading sideways when blocked.
+                        // Damp vertical velocity to keep water flat and fast horizontally
+                        self.vecy[i] *= 0.85;
+
+                        if x > 0 && x < self.nx - 1 {
+                            let left  = self.idx(x-1, y, z);
+                            let right = self.idx(x+1, y, z);
+                            if self.active[left] && self.active[right] {
+                                let avg = (self.vecx[left] + self.vecx[i] + self.vecx[right]) / 3.0;
+                                self.vecx[i] += (avg - self.vecx[i]) * 0.12;
+                            }
+                        }
+                        if z > 0 && z < self.nz - 1 {
+                            let front = self.idx(x, y, z-1);
+                            let back  = self.idx(x, y, z+1);
+                            if self.active[front] && self.active[back] {
+                                let avg = (self.vecz[front] + self.vecz[i] + self.vecz[back]) / 3.0;
+                                self.vecz[i] += (avg - self.vecz[i]) * 0.12;
+                            }
+                        }
                     }
                 }
             }
@@ -412,9 +434,9 @@ impl FluidGrid {
             if self.vecy[i].is_nan()    { self.vecy[i]    = 0.0; }
             if self.vecz[i].is_nan()    { self.vecz[i]    = 0.0; }
             if self.density[i].is_nan() { self.density[i] = 0.0; }
-            self.vecx[i]    = self.vecx[i].clamp(-20.0, 20.0);
-            self.vecy[i]    = self.vecy[i].clamp(-20.0, 20.0);
-            self.vecz[i]    = self.vecz[i].clamp(-20.0, 20.0);
+            self.vecx[i]    = self.vecx[i].clamp(-60.0, 60.0);
+            self.vecy[i]    = self.vecy[i].clamp(-15.0, 15.0);  // tight vertical clamp keeps it flat
+            self.vecz[i]    = self.vecz[i].clamp(-60.0, 60.0);
             self.density[i] = (self.density[i] * DENSITY_DECAY).clamp(0.0, 1.0);
         }
     }
