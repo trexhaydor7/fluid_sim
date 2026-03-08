@@ -1,11 +1,14 @@
-constant dt_STEP = 0.1; //for 60 FPS
+
+#![allow(dead_code, unused_variables)]
+
+const DT: f32 = 0.016; //for 60 FPS
 
 pub struct FluidGrid {
     //Size of grid
     nx: usize,
     ny: usize,
     nz: usize,
-    active: Vec<bool>
+    active: Vec<bool>,
 
     dt: f32,
 
@@ -29,7 +32,7 @@ impl FluidGrid {
             nx,
             ny,
             nz,
-            active: true,
+            active: vec![true; size],
             dt: 0.0, 
             vecx: vec![0.0; size],
             vecy: vec![0.0; size],
@@ -58,8 +61,8 @@ impl FluidGrid {
         self.dt
     }
 
-    pub fn increment_dt(&mut self, dt: f32) {
-        self.dt = dt + dt_STEP;
+    pub fn increment_dt(&mut self) {
+        self.dt += DT;
     }
     pub fn idx(&self, x: usize, y: usize, z: usize) -> usize {
         return x + y * self.nx + z * self.nx * self.ny;
@@ -103,7 +106,7 @@ impl FluidGrid {
     }
 
     //Vector in the form [nx, ny, nz, x, y, z, density. x, y, z, density, ...]
-    pub fn raw_3d_matrix(&self) -> Vec<f32> {
+    pub fn raw_3d_matrix(&self) -> Vec<f32>{
         let mut buf = Vec::new();
 
         //Return total matrix size

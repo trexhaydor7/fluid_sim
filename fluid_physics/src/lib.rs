@@ -19,13 +19,15 @@ impl FluidSim {
     }
 
     pub fn get_dt(&self) -> f32 {
+        return self.grid.get_dt()
+    }
+
+    pub fn increment_dt(&mut self) -> f32 {
+        self.grid.increment_dt();
         self.grid.get_dt()
     }
 
-    pub fn dt_step(&self) -> f32 {
-        self.grid.step(self.grid.get_dt());
-    }
-    pub fn raw_3d_matrix(&self) -> Vec<f32> {
-        self.grid.raw_3d_matrix()
+    pub fn raw_3d_matrix(&self) -> Box<[f32]> {
+        self.grid.raw_3d_matrix().into()
     }
 }

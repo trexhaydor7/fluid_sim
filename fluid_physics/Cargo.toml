@@ -3,4 +3,13 @@ name = "fluid_physics"
 version = "0.1.0"
 edition = "2024"
 
+[lib] 
+crate-type = ["cdylib", "rlib"] 
+
+[[bin]]
+name = "fluid_sim_test"
+path = "src/main.rs"
+
 [dependencies]
+crate = "0.1.1"
+wasm-bindgen = "0.2.114"
